@@ -1,5 +1,6 @@
 import sys
 import argparse
+from pathlib import Path
 
 def main():
     parser = argparse.ArgumentParser(
@@ -14,7 +15,15 @@ def main():
 
     args = parser.parse_args()
 
-    print(args.input_tiff_dir, args.output_zarr_ome_dir)
+    zarrdir = Path(args.output_zarr_ome_dir)
+    if zarrdir.suffix != ".zarr":
+        print("Name of ouput zarr directory must end with '.zarr'")
+        return 1
+
+    tiffdir = Path(args.input_tiff_dir)
+    if not tiffdir.exists():
+        print("Input TIFF directory",tiffdir,"does not exist")
+        return 1
 
 if __name__ == '__main__':
     sys.exit(main())
