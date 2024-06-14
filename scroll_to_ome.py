@@ -34,15 +34,9 @@ def slice_count(s, maxx):
     mx = min(mx, maxx)
     return mx-mn
 
-def tifs2zarr(tiffdir, zarrdir, chunk_size, slices=None, maxgb=None):
-    if slices is None:
-        xslice = yslice = zslice = None
-    else:
-        xslice, yslice, zslice = slices
-        if not all([slice_step_is_1(s) for s in slices]):
-            err = "All slice steps must be 1 in slices"
-            print(err)
-            return err
+def tifs2zarr(tiffdir, zarrdir, chunk_size):
+    xslice = yslice = zslice = None
+
     # Note this is a generator, not a list
     tiffs = tiffdir.glob("*.tif")
     rec = re.compile(r'([0-9]+)\.\w+$')
@@ -70,15 +64,6 @@ def tifs2zarr(tiffdir, zarrdir, chunk_size, slices=None, maxgb=None):
     itiffs = list(inttiffs.keys())
     itiffs.sort()
     z0 = 0
-    if zslice is not None:
-        maxz = itiffs[-1]+1
-        valid_zs = range(maxz)[zslice]
-        itiffs = list(filter(lambda z: z in valid_zs, itiffs))
-        # z0 = itiffs[0]
-        if zslice.start is None:
-            z0 = 0
-        else:
-            z0 = zslice.start
     
     # for testing
     # itiffs = itiffs[2048:2048+256]
@@ -96,12 +81,6 @@ def tifs2zarr(tiffdir, zarrdir, chunk_size, slices=None, maxgb=None):
     cy = ny0
     x0 = 0
     y0 = 0
-    if xslice is not None:
-        cx = slice_count(xslice, nx0)
-        x0 = slice_start(xslice)
-    if yslice is not None:
-        cy = slice_count(yslice, ny0)
-        y0 = slice_start(yslice)
     print("cx,cy,cz",cx,cy,cz)
     print("x0,y0,z0",x0,y0,z0)
     
@@ -119,10 +98,6 @@ def tifs2zarr(tiffdir, zarrdir, chunk_size, slices=None, maxgb=None):
 
     # nb of chunks in y direction that fit inside of max_gb
     chy = cy // chunk_size + 1
-    if maxgb is not None:
-        maxy = int((maxgb*10**9)/(cx*chunk_size*dt0.itemsize))
-        chy = maxy // chunk_size
-        chy = max(1, chy)
 
     # nb of y chunk groups
     ncgy = cy // (chunk_size*chy) + 1
@@ -204,11 +179,6 @@ def main():
             default=128, 
             help="Size of chunk")
     parser.add_argument(
-            "--max_gb", 
-            type=float, 
-            default=None, 
-            help="Maximum amount of memory (in Gbytes) to use; None means no limit")
-    parser.add_argument(
             "--zarr_only", 
             action="store_true", 
             help="Create a simple Zarr data store instead of an OME/Zarr hierarchy")
@@ -226,7 +196,6 @@ def main():
         return 1
 
     chunk_size = args.chunk_size
-    maxgb = args.max_gb
     zarr_only = args.zarr_only
     
     slices = None
@@ -238,7 +207,7 @@ def main():
             shutil.rmtree(zarrdir)
 
     if zarr_only:
-        err = tifs2zarr(tiffdir, zarrdir, chunk_size, slices=slices, maxgb=maxgb)
+        err = tifs2zarr(tiffdir, zarrdir, chunk_size)
         if err is not None:
             print("error returned:", err)
         return 1
