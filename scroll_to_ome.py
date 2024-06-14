@@ -3,6 +3,7 @@ import re
 import shutil
 import argparse
 from pathlib import Path
+import tifffile
 
 def tifs2zarr(tiffdir, zarrdir, chunk_size):
     # Note this is a generator, not a list
@@ -29,8 +30,30 @@ def tifs2zarr(tiffdir, zarrdir, chunk_size):
         print(err)
         return err
 
-    print('10th tiff path: ', inttiffs[10])
-    print('10th tiff name: ', inttiffs[10].name)
+    itiffs = list(inttiffs.keys())
+    itiffs.sort()
+    z0 = 0
+
+    print('tiff list 0~9: ', itiffs[:10])
+    
+    # for testing
+    # itiffs = itiffs[2048:2048+256]
+    
+    minz = itiffs[0]
+    maxz = itiffs[-1]
+    cz = maxz-z0+1
+    
+    tiff0 = tifffile.imread(inttiffs[minz])
+    ny0, nx0 = tiff0.shape
+    dt0 = tiff0.dtype
+    print("tiff size", nx0, ny0, "z range", minz, maxz)
+
+    cx = nx0
+    cy = ny0
+    x0 = 0
+    y0 = 0
+    print("cx,cy,cz",cx,cy,cz)
+    print("x0,y0,z0",x0,y0,z0)
 
 def main():
     parser = argparse.ArgumentParser(
