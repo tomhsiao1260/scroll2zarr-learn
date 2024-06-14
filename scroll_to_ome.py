@@ -1,10 +1,36 @@
 import sys
+import re
 import shutil
 import argparse
 from pathlib import Path
 
 def tifs2zarr(tiffdir, zarrdir, chunk_size):
-    print('tifs2zarr init')
+    # Note this is a generator, not a list
+    tiffs = tiffdir.glob("*.tif")
+    rec = re.compile(r'([0-9]+)\.\w+$')
+    # rec = re.compile(r'[0-9]+$')
+    inttiffs = {}
+    for tiff in tiffs:
+        tname = tiff.name
+        match = rec.match(tname)
+        if match is None:
+            continue
+        # Look for last match (closest to end of file name)
+        # ds = match[-1]
+        ds = match.group(1)
+        itiff = int(ds)
+        if itiff in inttiffs:
+            err = "File %s: tiff id %d already used"%(tname,itiff)
+            print(err)
+            return err
+        inttiffs[itiff] = tiff
+    if len(inttiffs) == 0:
+        err = "No tiffs found"
+        print(err)
+        return err
+
+    print('10th tiff path: ', inttiffs[10])
+    print('10th tiff name: ', inttiffs[10].name)
 
 def main():
     parser = argparse.ArgumentParser(
