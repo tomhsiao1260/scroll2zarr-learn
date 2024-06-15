@@ -9,34 +9,7 @@ import numpy as np
 import tifffile
 import zarr
 
-def slice_step_is_1(s):
-    if s is None:
-        return True
-    if s.step is None:
-        return True
-    if s.step == 1:
-        return True
-    return False
-
-def slice_start(s):
-    if s.start is None:
-        return 0
-    return s.start
-
-def slice_count(s, maxx):
-    mn = s.start
-    if mn is None:
-        mn = 0
-    mn = max(0, mn)
-    mx = s.stop
-    if mx is None:
-        mx = maxx
-    mx = min(mx, maxx)
-    return mx-mn
-
 def tifs2zarr(tiffdir, zarrdir, chunk_size):
-    xslice = yslice = zslice = None
-
     # Note this is a generator, not a list
     tiffs = tiffdir.glob("*.tif")
     rec = re.compile(r'([0-9]+)\.\w+$')
@@ -122,8 +95,6 @@ def tifs2zarr(tiffdir, zarrdir, chunk_size):
             if nx != nx0 or ny != ny0:
                 print("\nFile %s is the wrong shape (%d, %d); expected %d, %d"%(tiffname,nx,ny,nx0,ny0))
                 continue
-            if xslice is not None and yslice is not None:
-                tarr = tarr[yslice, xslice]
             cur_zc = z // chunk_size
             if cur_zc != prev_zc:
                 if prev_zc >= 0:
@@ -139,7 +110,7 @@ def tifs2zarr(tiffdir, zarrdir, chunk_size):
             cur_bufz = z-cur_zc*chunk_size
             # print("cur_bufzk,ye,ys", cur_bufz,ye,ys)
             buf[cur_bufz,:ye-ys,:] = tarr[ys:ye,:]
-        
+
         if prev_zc >= 0:
             zs = prev_zc*chunk_size
             ze = zs+chunk_size
@@ -155,12 +126,6 @@ def tifs2zarr(tiffdir, zarrdir, chunk_size):
             else:
                 print("\n(end)")
         buf[:,:,:] = 0
-
-def divp1(s, c):
-    n = s // c
-    if s%c > 0:
-        n += 1
-    return n
 
 def main():
     # parser = argparse.ArgumentParser()
@@ -210,7 +175,8 @@ def main():
         err = tifs2zarr(tiffdir, zarrdir, chunk_size)
         if err is not None:
             print("error returned:", err)
-        return 1
+            return 1
+        return
 
 if __name__ == '__main__':
     sys.exit(main())
