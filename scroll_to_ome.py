@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 import tifffile
 import zarr
+import skimage.transform
 
 # return None if succeeds, err string if fails
 def create_ome_dir(zarrdir):
@@ -195,6 +196,12 @@ def tifs2zarr(tiffdir, zarrdir, chunk_size):
                 print("\n(end)")
         buf[:,:,:] = 0
 
+def divp1(s, c):
+    n = s // c
+    if s%c > 0:
+        n += 1
+    return n
+
 def resize(zarrdir, old_level, algorithm="mean"):
     idir = zarrdir / ("%d"%old_level)
     if not idir.exists():
@@ -208,6 +215,74 @@ def resize(zarrdir, old_level, algorithm="mean"):
     
     # print(idata.chunks, idata.shape)
     print("Creating level", old_level+1,"  input array shape", idata.shape)
+
+    # order is z,y,x
+    
+    cz = idata.chunks[0]
+    cy = idata.chunks[1]
+    cx = idata.chunks[2]
+    
+    sz = idata.shape[0]
+    sy = idata.shape[1]
+    sx = idata.shape[2]
+    
+    store = zarr.NestedDirectoryStore(odir)
+    odata = zarr.open(
+            store=store,
+            shape=(divp1(sz,2), divp1(sy,2), divp1(sx,2)),
+            chunks=idata.chunks,
+            dtype=idata.dtype,
+            write_empty_chunks=False,
+            fill_value=0,
+            compressor=None,
+            mode='w',
+            )
+    
+    # 2*chunk size because we want number of blocks after rescale
+    nz = divp1(sz, 2*cz)
+    ny = divp1(sy, 2*cy)
+    nx = divp1(sx, 2*cx)
+    
+    print("nzyx", nz,ny,nx)
+    ibuf = np.zeros((2*cz,2*cy,2*cx), dtype=idata.dtype)
+    for z in range(nz):
+        print("z", z+1, "of", nz, end='\r')
+        for y in range(ny):
+            for x in range(nx):
+                ibuf = idata[
+                        2*z*cz:(2*z*cz+2*cz),
+                        2*y*cy:(2*y*cy+2*cy),
+                        2*x*cx:(2*x*cx+2*cx)]
+                if np.max(ibuf) == 0:
+                    continue
+                # pad ibuf to even in all directions
+                ibs = ibuf.shape
+                pad = (ibs[0]%2, ibs[1]%2, ibs[2]%2)
+                if any(pad):
+                    ibuf = np.pad(ibuf, 
+                                  ((0,pad[0]),(0,pad[1]),(0,pad[2])), 
+                                  mode="symmetric")
+                    print("padded",ibs,"to",ibuf.shape, end='\r')
+                # algorithms:
+                if algorithm == "nearest":
+                    obuf = ibuf[::2, ::2, ::2]
+                elif algorithm == "gaussian":
+                    obuf = np.round(
+                        skimage.transform.rescale(
+                            ibuf, .5, preserve_range=True))
+                elif algorithm == "mean":
+                    obuf = np.round(
+                        skimage.transform.downscale_local_mean(
+                            ibuf, (2,2,2)))
+                else:
+                    err = "algorithm %s not valid"%algorithm
+                    print(err)
+                    return err
+                # print(np.max(obuf), x, y, z)
+                odata[ z*cz:(z*cz+cz),
+                       y*cy:(y*cy+cy),
+                       x*cx:(x*cx+cx)] = np.round(obuf)
+    print()
 
 def main():
     parser = argparse.ArgumentParser(

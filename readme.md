@@ -127,5 +127,7 @@ tzarr 軸依序為 z, y, x，(0, 0, 0) 對應到第一張 tif 的左上角原點
 
 會在指定的 level 上，加入新的一層，也就是邊長減半的 level，好比說輸入的 `idir` 為 `scroll.zarr/0`，那輸出的 `odir` 就是 `scroll.zarr/1`
 
+實作上，使用了 `divp1` 計算減半後的各種參數數值，以及 `skimage.transform` 把原始資料做裁切縮放
+
 
 
