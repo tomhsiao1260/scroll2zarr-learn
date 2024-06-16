@@ -354,8 +354,13 @@ def main():
         print("error returned:", err)
         return 1
 
-    old_level = 0
-    err = resize(zarrdir, old_level, algorithm)
+    # for each level (1 and beyond):
+    existing_level = 0
+    for l in range(existing_level, nlevels-1):
+        err = resize(zarrdir, l, algorithm)
+        if err is not None:
+            print("error returned:", err)
+            return 1
 
 
 if __name__ == '__main__':
