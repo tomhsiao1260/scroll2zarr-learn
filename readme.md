@@ -129,5 +129,9 @@ tzarr 軸依序為 z, y, x，(0, 0, 0) 對應到第一張 tif 的左上角原點
 
 實作上，使用了 `divp1` 計算減半後的各種參數數值，以及 `skimage.transform` 把原始資料做裁切縮放
 
+### first_new_level
+
+使用 `--first_new_level n`，表示會用 level n-1 的資料作為基礎，往上建立其他層的 OME/Zarr 資料
+
 
 

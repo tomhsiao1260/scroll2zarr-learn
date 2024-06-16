@@ -308,6 +308,11 @@ def main():
             "--zarr_only", 
             action="store_true", 
             help="Create a simple Zarr data store instead of an OME/Zarr hierarchy")
+    parser.add_argument(
+            "--first_new_level", 
+            type=int, 
+            default=None, 
+            help="Advanced: If some subdivision levels already exist, create new levels, starting with this one")
 
     args = parser.parse_args()
 
@@ -317,13 +322,14 @@ def main():
         return 1
 
     tiffdir = Path(args.input_tiff_dir)
-    if not tiffdir.exists():
+    if not tiffdir.exists() and args.first_new_level is None:
         print("Input TIFF directory",tiffdir,"does not exist")
         return 1
 
     chunk_size = args.chunk_size
     nlevels = args.nlevels
     zarr_only = args.zarr_only
+    first_new_level = args.first_new_level
     algorithm = 'mean'
     
     if zarr_only:
@@ -338,30 +344,33 @@ def main():
             return 1
         return
 
-    err = create_ome_dir(zarrdir)
-    if err is not None:
-        print("error returned:", err)
-        return 1
-    
+    if first_new_level is None:
+        err = create_ome_dir(zarrdir)
+        if err is not None:
+            print("error returned:", err)
+            return 1
+
     err = create_ome_headers(zarrdir, nlevels)
     if err is not None:
         print("error returned:", err)
         return 1
 
-    print("Creating level 0")
-    err = tifs2zarr(tiffdir, zarrdir/"0", chunk_size)
-    if err is not None:
-        print("error returned:", err)
-        return 1
+    if first_new_level is None:
+        print("Creating level 0")
+        err = tifs2zarr(tiffdir, zarrdir/"0", chunk_size)
+        if err is not None:
+            print("error returned:", err)
+            return 1
 
     # for each level (1 and beyond):
     existing_level = 0
+    if first_new_level is not None:
+        existing_level = first_new_level-1
     for l in range(existing_level, nlevels-1):
         err = resize(zarrdir, l, algorithm)
         if err is not None:
             print("error returned:", err)
             return 1
-
 
 if __name__ == '__main__':
     sys.exit(main())
