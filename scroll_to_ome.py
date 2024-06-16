@@ -258,6 +258,12 @@ def main():
         print("error returned:", err)
         return 1
 
+    print("Creating level 0")
+    err = tifs2zarr(tiffdir, zarrdir/"0", chunk_size)
+    if err is not None:
+        print("error returned:", err)
+        return 1
+
 
 if __name__ == '__main__':
     sys.exit(main())
