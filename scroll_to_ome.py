@@ -8,6 +8,73 @@ import copy
 import numpy as np
 import tifffile
 import zarr
+import skimage.transform
+
+# return None if succeeds, err string if fails
+def create_ome_dir(zarrdir):
+    # complain if directory already exists
+    if zarrdir.exists():
+        err = "Directory %s already exists"%zarrdir
+        print(err)
+        return err
+
+    try:
+        zarrdir.mkdir()
+    except Exception as e:
+        err = "Error while creating %s: %s"%(zarrdir, e)
+        print(err)
+        return err
+
+def create_ome_headers(zarrdir, nlevels):
+    zattrs_dict = {
+        "multiscales": [
+            {
+                "axes": [
+                    {
+                        "name": "z",
+                        "type": "space"
+                    },
+                    {
+                        "name": "y",
+                        "type": "space"
+                    },
+                    {
+                        "name": "x",
+                        "type": "space"
+                    }
+                ],
+                "datasets": [],
+                "name": "/",
+                "version": "0.4"
+            }
+        ]
+    }
+
+    dataset_dict = {
+        "coordinateTransformations": [
+            {
+                "scale": [
+                ],
+                "type": "scale"
+            }
+        ],
+        "path": ""
+    }
+    
+    zgroup_dict = { "zarr_format": 2 }
+
+    datasets = []
+    for l in range(nlevels):
+        ds = copy.deepcopy(dataset_dict)
+        ds["path"] = "%d"%l
+        scale = 2.**l
+        ds["coordinateTransformations"][0]["scale"] = [scale]*3
+        # print(json.dumps(ds, indent=4))
+        datasets.append(ds)
+    zad = copy.deepcopy(zattrs_dict)
+    zad["multiscales"][0]["datasets"] = datasets
+    json.dump(zgroup_dict, (zarrdir / ".zgroup").open("w"), indent=4)
+    json.dump(zad, (zarrdir / ".zattrs").open("w"), indent=4)
 
 def tifs2zarr(tiffdir, zarrdir, chunk_size):
     # Note this is a generator, not a list
@@ -127,6 +194,94 @@ def tifs2zarr(tiffdir, zarrdir, chunk_size):
                 print("\n(end)")
         buf[:,:,:] = 0
 
+def divp1(s, c):
+    n = s // c
+    if s%c > 0:
+        n += 1
+    return n
+
+def resize(zarrdir, old_level, algorithm="mean"):
+    idir = zarrdir / ("%d"%old_level)
+    if not idir.exists():
+        err = "input directory %s does not exist" % idir
+        print(err)
+        return(err)
+    odir = zarrdir / ("%d"%(old_level+1))
+    # print(zarrdir, idir, odir)
+    
+    idata = zarr.open(idir, mode="r")
+    
+    # print(idata.chunks, idata.shape)
+    print("Creating level", old_level+1,"  input array shape", idata.shape)
+    
+    # order is z,y,x
+    
+    cz = idata.chunks[0]
+    cy = idata.chunks[1]
+    cx = idata.chunks[2]
+    
+    sz = idata.shape[0]
+    sy = idata.shape[1]
+    sx = idata.shape[2]
+    
+    store = zarr.NestedDirectoryStore(odir)
+    odata = zarr.open(
+            store=store,
+            shape=(divp1(sz,2), divp1(sy,2), divp1(sx,2)),
+            chunks=idata.chunks,
+            dtype=idata.dtype,
+            write_empty_chunks=False,
+            fill_value=0,
+            compressor=None,
+            mode='w',
+            )
+    
+    # 2*chunk size because we want number of blocks after rescale
+    nz = divp1(sz, 2*cz)
+    ny = divp1(sy, 2*cy)
+    nx = divp1(sx, 2*cx)
+    
+    print("nzyx", nz,ny,nx)
+    ibuf = np.zeros((2*cz,2*cy,2*cx), dtype=idata.dtype)
+    for z in range(nz):
+        print("z", z+1, "of", nz, end='\r')
+        for y in range(ny):
+            for x in range(nx):
+                ibuf = idata[
+                        2*z*cz:(2*z*cz+2*cz),
+                        2*y*cy:(2*y*cy+2*cy),
+                        2*x*cx:(2*x*cx+2*cx)]
+                if np.max(ibuf) == 0:
+                    continue
+                # pad ibuf to even in all directions
+                ibs = ibuf.shape
+                pad = (ibs[0]%2, ibs[1]%2, ibs[2]%2)
+                if any(pad):
+                    ibuf = np.pad(ibuf, 
+                                  ((0,pad[0]),(0,pad[1]),(0,pad[2])), 
+                                  mode="symmetric")
+                    print("padded",ibs,"to",ibuf.shape, end='\r')
+                # algorithms:
+                if algorithm == "nearest":
+                    obuf = ibuf[::2, ::2, ::2]
+                elif algorithm == "gaussian":
+                    obuf = np.round(
+                        skimage.transform.rescale(
+                            ibuf, .5, preserve_range=True))
+                elif algorithm == "mean":
+                    obuf = np.round(
+                        skimage.transform.downscale_local_mean(
+                            ibuf, (2,2,2)))
+                else:
+                    err = "algorithm %s not valid"%algorithm
+                    print(err)
+                    return err
+                # print(np.max(obuf), x, y, z)
+                odata[ z*cz:(z*cz+cz),
+                       y*cy:(y*cy+cy),
+                       x*cx:(x*cx+cx)] = np.round(obuf)
+    print()
+
 def main():
     # parser = argparse.ArgumentParser()
     parser = argparse.ArgumentParser(
@@ -144,9 +299,19 @@ def main():
             default=128, 
             help="Size of chunk")
     parser.add_argument(
+            "--nlevels", 
+            type=int, 
+            default=6, 
+            help="Number of subdivision levels to create, including level 0")
+    parser.add_argument(
             "--zarr_only", 
             action="store_true", 
             help="Create a simple Zarr data store instead of an OME/Zarr hierarchy")
+    parser.add_argument(
+            "--first_new_level", 
+            type=int, 
+            default=None, 
+            help="Advanced: If some subdivision levels already exist, create new levels, starting with this one")
 
     args = parser.parse_args()
     
@@ -161,10 +326,12 @@ def main():
         return 1
 
     chunk_size = args.chunk_size
+    nlevels = args.nlevels
     zarr_only = args.zarr_only
+    first_new_level = args.first_new_level
     
     slices = None
-    zarr_only = True
+    algorithm = 'mean'
     
     if zarr_only:
         if zarrdir.exists():
@@ -177,6 +344,34 @@ def main():
             print("error returned:", err)
             return 1
         return
+
+    if first_new_level is None:
+        err = create_ome_dir(zarrdir)
+        if err is not None:
+            print("error returned:", err)
+            return 1
+    
+    err = create_ome_headers(zarrdir, nlevels)
+    if err is not None:
+        print("error returned:", err)
+        return 1
+    
+    if first_new_level is None:
+        print("Creating level 0")
+        err = tifs2zarr(tiffdir, zarrdir/"0", chunk_size)
+        if err is not None:
+            print("error returned:", err)
+            return 1
+    
+    # for each level (1 and beyond):
+    existing_level = 0
+    if first_new_level is not None:
+        existing_level = first_new_level-1
+    for l in range(existing_level, nlevels-1):
+        err = resize(zarrdir, l, algorithm)
+        if err is not None:
+            print("error returned:", err)
+            return 1
 
 if __name__ == '__main__':
     sys.exit(main())
