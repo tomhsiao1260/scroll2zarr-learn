@@ -37,5 +37,14 @@ tzarr[0:100, 500:1000, 300:700] = 150
 
 因為上面例子 `write_empty_chunks` 為 False，所以只會產生下面資料： `./scroll.zarr/0/3-6/2-5`。這是因為 chunk 邊長為 128，cz 軸從 0 到 100，所以 z 軸第 0 個需寫入，cy 軸從 500 到 1000，所以 y 軸第 3 到 6 個需寫入，cx 軸從 300 到 700，所以 x 軸第 2 到 5 個需寫入。另外也可以開啟 `./scroll.zarr/.zarray` 隱藏檔，這記錄了資料的相關配置資訊
 
+另外，也可以用下面語法讀取 zarr 檔案：
+
+```python
+data = zarr.open('scroll.zarr', mode="r")
+
+print('zarr shape: ', data.shape)
+print('min, max value: ', np.min(data), np.max(data))
+```
+
 
 

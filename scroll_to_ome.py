@@ -3,6 +3,7 @@ import re
 import shutil
 import argparse
 from pathlib import Path
+import numpy as np
 import tifffile
 import zarr
 
@@ -69,6 +70,11 @@ def tifs2zarr(tiffdir, zarrdir, chunk_size):
             )
 
     tzarr[0:100, 500:1000, 300:700] = 150
+
+    data = zarr.open(zarrdir, mode="r")
+
+    print('zarr shape: ', data.shape)
+    print('min, max value: ', np.min(data), np.max(data))
 
 def main():
     parser = argparse.ArgumentParser(
