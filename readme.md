@@ -121,7 +121,11 @@ tzarr 軸依序為 z, y, x，(0, 0, 0) 對應到第一張 tif 的左上角原點
 
 ### create_ome_headers
 
-創建 `.zattrs` 和 `.zgroup` 資料，前者不一定需要，主要是給開發者自己加入客製化資訊的屬性檔，後者則是說明使用的是 zarr 的第二版本。
+創建 `.zattrs` 和 `.zgroup` 資料，前者不一定需要，主要是給開發者自己加入客製化資訊的屬性檔，後者則是說明使用的是 zarr 的第二版本
+
+### resize
+
+會在指定的 level 上，加入新的一層，也就是邊長減半的 level，好比說輸入的 `idir` 為 `scroll.zarr/0`，那輸出的 `odir` 就是 `scroll.zarr/1`
 
 
 

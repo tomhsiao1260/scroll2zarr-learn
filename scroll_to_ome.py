@@ -195,6 +195,20 @@ def tifs2zarr(tiffdir, zarrdir, chunk_size):
                 print("\n(end)")
         buf[:,:,:] = 0
 
+def resize(zarrdir, old_level, algorithm="mean"):
+    idir = zarrdir / ("%d"%old_level)
+    if not idir.exists():
+        err = "input directory %s does not exist" % idir
+        print(err)
+        return(err)
+    odir = zarrdir / ("%d"%(old_level+1))
+    print(zarrdir, idir, odir)
+    
+    idata = zarr.open(idir, mode="r")
+    
+    # print(idata.chunks, idata.shape)
+    print("Creating level", old_level+1,"  input array shape", idata.shape)
+
 def main():
     parser = argparse.ArgumentParser(
             formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -235,6 +249,7 @@ def main():
     chunk_size = args.chunk_size
     nlevels = args.nlevels
     zarr_only = args.zarr_only
+    algorithm = 'mean'
     
     if zarr_only:
         if zarrdir.exists():
@@ -263,6 +278,9 @@ def main():
     if err is not None:
         print("error returned:", err)
         return 1
+
+    old_level = 0
+    err = resize(zarrdir, old_level, algorithm)
 
 
 if __name__ == '__main__':
