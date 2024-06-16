@@ -1,11 +1,79 @@
 import sys
 import re
+import json
 import shutil
 import argparse
+import copy
 from pathlib import Path
 import numpy as np
 import tifffile
 import zarr
+
+# return None if succeeds, err string if fails
+def create_ome_dir(zarrdir):
+    # complain if directory already exists
+    if zarrdir.exists():
+        err = "Directory %s already exists"%zarrdir
+        print(err)
+        return
+
+    try:
+        zarrdir.mkdir()
+    except Exception as e:
+        err = "Error while creating %s: %s"%(zarrdir, e)
+        print(err)
+        return err
+
+def create_ome_headers(zarrdir, nlevels):
+    zattrs_dict = {
+        "multiscales": [
+            {
+                "axes": [
+                    {
+                        "name": "z",
+                        "type": "space"
+                    },
+                    {
+                        "name": "y",
+                        "type": "space"
+                    },
+                    {
+                        "name": "x",
+                        "type": "space"
+                    }
+                ],
+                "datasets": [],
+                "name": "/",
+                "version": "0.4"
+            }
+        ]
+    }
+
+    dataset_dict = {
+        "coordinateTransformations": [
+            {
+                "scale": [
+                ],
+                "type": "scale"
+            }
+        ],
+        "path": ""
+    }
+    
+    zgroup_dict = { "zarr_format": 2 }
+
+    datasets = []
+    for l in range(nlevels):
+        ds = copy.deepcopy(dataset_dict)
+        ds["path"] = "%d"%l
+        scale = 2.**l
+        ds["coordinateTransformations"][0]["scale"] = [scale]*3
+        # print(json.dumps(ds, indent=4))
+        datasets.append(ds)
+    zad = copy.deepcopy(zattrs_dict)
+    zad["multiscales"][0]["datasets"] = datasets
+    json.dump(zgroup_dict, (zarrdir / ".zgroup").open("w"), indent=4)
+    json.dump(zad, (zarrdir / ".zattrs").open("w"), indent=4)
 
 def tifs2zarr(tiffdir, zarrdir, chunk_size):
     # Note this is a generator, not a list
@@ -143,6 +211,11 @@ def main():
             default=128, 
             help="Size of chunk")
     parser.add_argument(
+            "--nlevels", 
+            type=int, 
+            default=6, 
+            help="Number of subdivision levels to create, including level 0")
+    parser.add_argument(
             "--zarr_only", 
             action="store_true", 
             help="Create a simple Zarr data store instead of an OME/Zarr hierarchy")
@@ -160,10 +233,8 @@ def main():
         return 1
 
     chunk_size = args.chunk_size
+    nlevels = args.nlevels
     zarr_only = args.zarr_only
-    
-    slices = None
-    zarr_only = True
     
     if zarr_only:
         if zarrdir.exists():
@@ -176,6 +247,16 @@ def main():
             print("error returned:", err)
             return 1
         return
+
+    err = create_ome_dir(zarrdir)
+    if err is not None:
+        print("error returned:", err)
+        return 1
+    
+    err = create_ome_headers(zarrdir, nlevels)
+    if err is not None:
+        print("error returned:", err)
+        return 1
 
 
 if __name__ == '__main__':

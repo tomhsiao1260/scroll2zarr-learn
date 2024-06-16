@@ -2,7 +2,74 @@
 
 Try to learn [scroll2zarr](https://github.com/KhartesViewer/scroll2zarr) step by step.
 
-# Details
+## Command
+
+Prepare a folder called `stack` with a series of `.tif` data in it (e.g. 00.tif, 01.tif, ... 10.tif). And then run the following script. It will generate a `scroll.zarr` data for you.
+
+```bash
+python scroll_to_ome.py stack scroll.zarr
+```
+
+## Structure
+
+使用 `--zarr_only` 會執行 `tifs2zarr` 函數產生 zarr 檔，結構範例如下：
+
+```
+表示 z (0 到 1), y (5 到 6), x (2 到 4)
+
+.
+└── scroll.zarr
+    ├── .zarray
+    ├── 0
+    │   ├── 5
+    │   │   ├── 2
+    │   │   ├── 3
+    │   │   └── 4
+    │   └── 6
+    │       ├── 2
+    │       ├── 3
+    │       └── 4
+    └── 1
+        ├── 5
+        │   ├── 2
+        │   ├── 3
+        │   └── 4
+        └── 6
+            ├── 2
+            ├── 3
+            └── 4
+```
+
+沒有用 `--zarr_only` 則會產生 OME/Zarr 檔，結構範例如下：
+
+```
+假設創建 6 種 level，每上升一個 level 邊長減半，資料大小變 1/8
+
+.
+└── scroll.zarr
+    ├── .zattrs
+    ├── .zgroup
+    ├── 0
+    │   ├── .zarray
+    │   └── pure zarr structure (level 0)
+    ├── 1
+    │   ├── .zarray
+    │   └── pure zarr structure (level 1)
+    ├── 2
+    │   ├── .zarray
+    │   └── pure zarr structure (level 2)
+    ├── 3
+    │   ├── .zarray
+    │   └── pure zarr structure (level 3)
+    ├── 4
+    │   ├── .zarray
+    │   └── pure zarr structure (level 4)
+    └── 5
+        ├── .zarray
+        └── pure zarr structure (level 5)
+```
+
+## Details
 
 ### zarr
 
@@ -40,13 +107,21 @@ print('min, max value: ', np.min(data), np.max(data))
 
 ### tifs2zarr
 
-根據提供的 tiff 資料，產生對應的 zarr 資料
+根據提供的 tiff 資料，產生對應的 zarr 資料和 `.zarray` 隱藏檔
 
 首先，把所有 tiff 路徑存進一個叫 inttiffs 的字典，好比說，檔案 `0010.tif` 的 key 值為 10，對應的 value 為該檔案路徑，以 `PosixPath` 形式儲存。itiffs 則是一個列表，記錄了所有 key 值由小到大的排序。
 
 chunk_size 是每筆方塊資料的邊長，cx, cy, cz 是所有資料堆疊後各軸的長，定義好一些參數後，再來就是開啟一個 `zarr.open` 資料準備寫入。寫入方式主要就是透過 tarr 讀取 tiff 檔，透過 buf 把一個完整的 chunk 取出來，然後一個個寫進 tzarr 這個大陣列裡
 
 tzarr 軸依序為 z, y, x，(0, 0, 0) 對應到第一張 tif 的左上角原點座標 (cz, cy, cx) 則對應對後一張 tif 的右下角座標，檔案的巢狀格式也是按照順序由小排到大
+
+### create_ome_dir
+
+創建 `.zarr` 資料夾
+
+### create_ome_headers
+
+創建 `.zattrs` 和 `.zgroup` 資料，前者不一定需要，主要是給開發者自己加入客製化資訊的屬性檔，後者則是說明使用的是 zarr 的第二版本。
 
 
 
