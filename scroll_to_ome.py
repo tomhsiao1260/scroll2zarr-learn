@@ -69,12 +69,63 @@ def tifs2zarr(tiffdir, zarrdir, chunk_size):
             mode='w', 
             )
 
-    tzarr[0:100, 500:1000, 300:700] = 150
+    # nb of chunks in y direction that fit inside of max_gb
+    chy = cy // chunk_size + 1
 
-    data = zarr.open(zarrdir, mode="r")
+    # nb of y chunk groups
+    ncgy = cy // (chunk_size*chy) + 1
+    print("chy, ncgy", chy, ncgy)
+    buf = np.zeros((chunk_size, min(cy, chy*chunk_size), cx), dtype=dt0)
+    for icy in range(ncgy):
+        ys = icy*chy*chunk_size
+        ye = ys+chy*chunk_size
+        ye = min(ye, cy)
+        if ye == ys:
+            break
+        prev_zc = -1
+        for itiff in itiffs:
+            z = itiff-z0
+            tiffname = inttiffs[itiff]
+            print("reading",itiff,"     ", end='\r')
+            # print("reading",itiff)
+            tarr = tifffile.imread(tiffname)
+            # print("done reading",itiff, end='\r')
+            # tzarr[itiff,:,:] = tarr
+            ny, nx = tarr.shape
+            if nx != nx0 or ny != ny0:
+                print("\nFile %s is the wrong shape (%d, %d); expected %d, %d"%(tiffname,nx,ny,nx0,ny0))
+                continue
+            cur_zc = z // chunk_size
+            if cur_zc != prev_zc:
+                if prev_zc >= 0:
+                    zs = prev_zc*chunk_size
+                    ze = zs+chunk_size
+                    if ncgy == 1:
+                        print("\nwriting, z range %d,%d"%(zs+z0, ze+z0))
+                    else:
+                        print("\nwriting, z range %d,%d  y range %d,%d"%(zs+z0, ze+z0, ys+y0, ye+y0))
+                    tzarr[zs:z,ys:ye,:] = buf[:ze-zs,:ye-ys,:]
+                    buf[:,:,:] = 0
+                prev_zc = cur_zc
+            cur_bufz = z-cur_zc*chunk_size
+            # print("cur_bufzk,ye,ys", cur_bufz,ye,ys)
+            buf[cur_bufz,:ye-ys,:] = tarr[ys:ye,:]
 
-    print('zarr shape: ', data.shape)
-    print('min, max value: ', np.min(data), np.max(data))
+        if prev_zc >= 0:
+            zs = prev_zc*chunk_size
+            ze = zs+chunk_size
+            ze = min(itiffs[-1]+1-z0, ze)
+            if ze > zs:
+                if ncgy == 1:
+                    print("\nwriting, z range %d,%d"%(zs+z0, ze+z0))
+                else:
+                    print("\nwriting, z range %d,%d  y range %d,%d"%(zs+z0, ze+z0, ys+y0, ye+y0))
+                # print("\nwriting (end)", zs, ze)
+                # tzarr[zs:zs+bufnz,:,:] = buf[0:(1+cur_bufz)]
+                tzarr[zs:ze,ys:ye,:] = buf[:ze-zs,:ye-ys,:]
+            else:
+                print("\n(end)")
+        buf[:,:,:] = 0
 
 def main():
     parser = argparse.ArgumentParser(
