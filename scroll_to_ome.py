@@ -4,6 +4,7 @@ import shutil
 import argparse
 from pathlib import Path
 import tifffile
+import zarr
 
 def tifs2zarr(tiffdir, zarrdir, chunk_size):
     # Note this is a generator, not a list
@@ -54,6 +55,20 @@ def tifs2zarr(tiffdir, zarrdir, chunk_size):
     y0 = 0
     print("cx,cy,cz",cx,cy,cz)
     print("x0,y0,z0",x0,y0,z0)
+
+    store = zarr.NestedDirectoryStore(zarrdir)
+    tzarr = zarr.open(
+            store=store, 
+            shape=(cz, cy, cx), 
+            chunks=(chunk_size, chunk_size, chunk_size),
+            dtype = tiff0.dtype,
+            write_empty_chunks=False,
+            fill_value=0,
+            compressor=None,
+            mode='w', 
+            )
+
+    tzarr[0:100, 500:1000, 300:700] = 150
 
 def main():
     parser = argparse.ArgumentParser(
