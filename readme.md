@@ -99,7 +99,8 @@ tzarr[0:100, 500:1000, 300:700] = 150
 另外，也可以用下面語法讀取 zarr 檔案：
 
 ```python
-data = zarr.open('scroll.zarr', mode="r")
+data = zarr.open('scroll.zarr/0/', mode="r")
+data = np.array(data)
 
 print('zarr shape: ', data.shape)
 print('min, max value: ', np.min(data), np.max(data))
